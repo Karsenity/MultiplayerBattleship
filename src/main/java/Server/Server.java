@@ -1,5 +1,7 @@
 package Server;
 
+import GameLogic.Lobby;
+
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -9,35 +11,40 @@ import java.util.ArrayList;
 public class Server {
 
     private final ServerSocket server;
-    private ArrayList<ServerThread> instances;
+    private final ArrayList<UserThread> userInstances;
+    private final ArrayList<Lobby> lobbies;
 
     public Server(int port) throws IOException {
         this.server = new ServerSocket(port);
-        this.instances = new ArrayList<>();
+        this.userInstances = new ArrayList<>();
+        this.lobbies = new ArrayList<>();
     }
 
     private void acceptClients(){
         Socket s;
-
-        while (true){
-            try {
+        try {
+            while (true){
                 s = server.accept();
-                System.out.println("Added Client to Server");
-                ServerThread st = new ServerThread(s, this);
+                UserThread st = new UserThread(s, this);
                 st.start();
-                instances.add(st);
-
+                userInstances.add(st);
             }
-            catch(Exception e){
-                e.printStackTrace();
-                System.out.println("Connection Error");
-
-            }
+        } catch(Exception e){
+            e.printStackTrace();
+            System.out.println("Connection Error");
         }
     }
 
-    public ArrayList<ServerThread> getInstances(){
-        return instances;
+    public void addLobby(Lobby l){
+        lobbies.add(l);
+    }
+
+    public ArrayList<Lobby> getLobbies(){
+        return lobbies;
+    }
+
+    public ArrayList<UserThread> getInstances(){
+        return userInstances;
     }
 
 
