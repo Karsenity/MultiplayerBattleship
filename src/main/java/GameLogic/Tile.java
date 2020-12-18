@@ -15,7 +15,7 @@ public class Tile {
             String cell = switch (integer) {
                 case 0 -> "|   ";
                 case 1 -> "| - ";
-                case 2 -> "| * ";
+                case 2, 3 -> "| @ ";
                 case 4 -> "| O ";
                 default -> throw new IllegalStateException("Unexpected value: " + integer);
             };

@@ -137,11 +137,13 @@ public class Lobby {
             ArrayList<ArrayList<Integer>> opponentBoard = curData.getOpponentsBoard();
             ArrayList<ArrayList<Integer>> curBoard = otherData.getOpponentsBoard();
             for (Ship s: ships){
-                for (ArrayList<Integer> tile: s.getCoords()){
-                    int x = tile.get(0);
-                    int y = tile.get(1);
-                    if (curBoard.get(x).get(y) == 0){
-                        curBoard.get(x).set(y, 4);
+                if (!s.isSunk()){
+                    for (ArrayList<Integer> tile: s.getCoords()){
+                        int x = tile.get(0);
+                        int y = tile.get(1);
+                        if (curBoard.get(x).get(y) == 0){
+                            curBoard.get(x).set(y, 4);
+                        }
                     }
                 }
             }
@@ -154,6 +156,7 @@ public class Lobby {
 
         } catch(Exception e){
             System.out.println("Error drawing board");
+            e.printStackTrace();
         }
     }
 

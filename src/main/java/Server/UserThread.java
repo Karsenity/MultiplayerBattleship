@@ -2,11 +2,19 @@ package Server;
 
 import GameLogic.Lobby;
 
+import javax.crypto.BadPaddingException;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.security.*;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
+import java.util.Arrays;
+import java.util.Base64;
 import java.util.UUID;
 
 public class UserThread extends Thread{
@@ -17,7 +25,9 @@ public class UserThread extends Thread{
     Lobby lobby;
     BufferedReader userInput = null;
     PrintWriter userOutput=null;
-
+    String k1;
+    String k2;
+    PublicKey publicKey;
 
     public UserThread(Socket s, Server server){
         this.serverSocket = s;
@@ -33,8 +43,7 @@ public class UserThread extends Thread{
         try {
             while(request.compareTo("QUIT")!=0){
                 request = userInput.readLine();
-                matchCommand(request);
-                //userOutput.println(line);
+                matchCommand(server.decryptMessage(request));
             }
         }
         catch (IOException e) {
@@ -42,24 +51,33 @@ public class UserThread extends Thread{
         }
         catch(NullPointerException e){
             System.out.println("Client "+ this.getName() +" Closed");
-        }
-
-        finally {
+        } catch (NoSuchAlgorithmException | InvalidKeyException | IllegalBlockSizeException | BadPaddingException | NoSuchPaddingException e) {
+            e.printStackTrace();
+        } finally {
             closeConnection();
         }
     }
 
     private void matchCommand(String request){
         try {
+            //Assign PublicKey for user
+            if (request.startsWith("Key1 ")){
+                this.k1 = request.replace("Key1 ", "");
+                attemptKeyConstruct();
+            }
+            else if (request.startsWith("Key2 ")){
+                this.k2 = request.replace("Key2 ", "");
+                attemptKeyConstruct();
+            }
             // Create Lobby
-            if (request.equals("Create Lobby")) {
+            else if (request.equals("Create Lobby")) {
                 createLobby();
             }
             // List Lobbies
             else if (request.equals("List Lobbies")) {
-                userOutput.println("Lobbies: ");
+                message("Lobbies: ");
                 for (Lobby l : server.getLobbies()) {
-                    userOutput.println("\t" + l.getGameID());
+                    message("\t" + l.getGameID());
                 }
             }
             // Join Lobby
@@ -74,14 +92,14 @@ public class UserThread extends Thread{
                     String[] positions = request.split(" ");
                     fire(Integer.parseInt(positions[0]), Integer.parseInt(positions[1]));
                 } else {
-                    userOutput.println("ERROR: You can't fire until player2 joins");
+                    message("ERROR: You can't fire until player2 joins");
                 }
 
             } else {
-                userOutput.println("Command: ");
+                message("Command: ");
             }
         } catch(Exception e){
-            userOutput.println("ERROR: Unexpected input");
+            message("ERROR: Unexpected input");
         }
     }
 
@@ -93,7 +111,7 @@ public class UserThread extends Thread{
         if (this.lobby == null) {
             this.lobby = new Lobby(this);
             server.addLobby(this.lobby);
-            userOutput.println("Command: Joined lobby successfully!");
+            message("Command: Joined lobby successfully!");
         }
     }
 
@@ -103,24 +121,29 @@ public class UserThread extends Thread{
                 if (l.getGameID().equals(gameID) && l.getPlayer2() == null){
                     l.setPlayer2(this);
                     this.lobby = l;
-                    userOutput.println("Command: Joined lobby successfully!");
+                    message("Command: Joined lobby successfully!");
                     break;
                 }
             }
         } else {
-            userOutput.println("ERROR: couldn't join lobby specified");
+            message("ERROR: couldn't join lobby specified");
         }
     }
 
     public void message(String message){
-        userOutput.println(message);
+        try {
+            var encryptedMessage = this.server.encryptMessage(message, this.publicKey);
+            var encodedMessage = Base64.getEncoder().encode(encryptedMessage);
+            userOutput.println(new String(encodedMessage));
+        } catch (Exception ex){
+            System.out.println("ERROR: Couldn't send message");
+        }
     }
 
     private void initialize(){
         try {
             this.userInput = new BufferedReader(new InputStreamReader(serverSocket.getInputStream()));
             this.userOutput = new PrintWriter(serverSocket.getOutputStream(), true);
-
         }
         catch(IOException e) {
             System.out.println("IO error in server thread");
@@ -144,8 +167,21 @@ public class UserThread extends Thread{
         }
     }
 
+    private void receiveUserKey(String key) throws NoSuchAlgorithmException, InvalidKeySpecException {
+        //Decrypt the message
+        var decryptedKey = Base64.getDecoder().decode(key);
+        //Use KeyFactory to rebuild key from byte[]
+        KeyFactory kf = KeyFactory.getInstance("RSA");
+        this.publicKey = kf.generatePublic(new X509EncodedKeySpec(decryptedKey));
+    }
+
+    private void attemptKeyConstruct() throws InvalidKeySpecException, NoSuchAlgorithmException {
+        if (this.k1 != null && this.k2 != null){
+            receiveUserKey(k1 + k2);
+        }
+    }
+
     public UUID getUserID(){
         return this.userID;
     }
-
 }
